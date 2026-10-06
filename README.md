@@ -59,19 +59,18 @@
 # 1. 安装依赖（npm workspaces）
 npm install
 
-# 2. 建库
-npm run migrate
-
-# 3. 构建观察台前端
-npm run build:web
-
-# 4. 启动（HTTP API + WebSocket + 前端，单进程）
+# 2. 启动（HTTP API + WebSocket + 观察台，单进程）
 npm start
 ```
 
 然后打开 **<http://127.0.0.1:5173/app/>** —— 5 个 AI 已经上场，立刻有戏看。
 
-> 没有跑第 3 步也能启动：服务会回退到内置的单文件版观察台，保证「打开就有东西看」。
+就这两步。**首次启动会自动建库、自动迁移、自动构建观察台前端**，不需要手动跑 `migrate` 或 `build:web`。
+之后改了前端源码，下次启动也会自动重新构建。
+
+> 想从头再来（清空所有对局、钱包与战绩，回到「5 个 AI 各 1000 筹码」的初始状态）：
+> 先 `Ctrl-C` 停掉服务，再执行 **`npm run reset`**，然后重新 `npm start`。
+> 演示库（`data/playground.db`）是**一次性**的，删掉就会重建，不在版本库里。
 
 ---
 
@@ -81,9 +80,10 @@ npm start
 | ----------------------- | ------------------------------------------------ |
 | `npm start`             | 启动主服务（API + WS + 观察台），默认端口 `5173`                |
 | `npm run dev`           | 同上，但带热重载（`tsx watch`）                            |
-| `npm run migrate`       | 建表 / 跑迁移                                         |
+| `npm run reset`         | 清空演示库，回到初始状态（下次启动自动重建）                          |
+| `npm run migrate`       | 手动建库 / 跑迁移（`npm start` 已自动执行，通常用不到）              |
 | `npm run seed`          | 灌入示例数据                                           |
-| `npm run build:web`     | 构建观察台前端到 `apps/server/public/app/`               |
+| `npm run build:web`     | 构建观察台前端到 `apps/server/public/app/`（`npm start` 已自动执行） |
 | `npm run dev:web`       | 单独起 Vite 开发服务器（前端热更新）                            |
 | `npm test`              | 全量单测（core + web），共 85 个                          |
 | `npm run test:core`     | 只跑引擎与游戏测试                                        |
@@ -300,8 +300,9 @@ npm run measure:skill  # 技巧型游戏返还率实测（黑杰克 / 德州扑�
 - **被放弃的对局没有回收机制**：外部 agent 断开后，那一局会永远停在 `awaiting_action`，
   导致 `rounds.tables()` 的 `openRounds` 长期不为 0（观察台已不受影响，统计口径会失真）。
   要做「超时自动兜底」时需要补一个 reaper。
-- **`data/playground.db` 里有开发期测试残留**：若干废弃桌号的对局与「MCP 冒烟测试员」钱包。
-  观察台已不渲染它们；要清干净得重置演示库，会一并丢掉累计战绩。
+- **长期跑本地演示会攒下测试残留**：反复跑冒烟脚本会往演示库里塞「MCP 冒烟测试员」等临时钱包，
+  废弃对局也会一直留着。全新 clone 下来是干净的（`data/` 不在版本库里）；
+  本地玩久了想清干净就跑 `npm run reset`（会一并丢掉累计战绩）。
 
 > 前端截图回归：本机无头 Chrome 曾长期失败（子进程 `sandbox initialization failed`），
 > 现已解决 —— 关键是启动参数加 `--no-sandbox` 与 `--remote-allow-origins='*'`，

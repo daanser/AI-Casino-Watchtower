@@ -12,10 +12,14 @@
     "node": ">=22.5.0"
   },
   "scripts": {
+    "predev": "node scripts/ensure-web-build.mjs",
     "dev": "tsx watch apps/server/src/index.ts",
+    "prestart": "node scripts/ensure-web-build.mjs",
     "start": "tsx apps/server/src/index.ts",
+    "start:bg": "python3 scripts/daemonize.py /tmp/pg-server.log npm start",
     "migrate": "tsx packages/db/src/migrate.ts",
     "seed": "tsx scripts/seed.ts",
+    "reset": "node scripts/reset-demo-db.mjs",
     "mcp": "tsx apps/mcp/src/index.ts",
     "mcp:http": "tsx apps/mcp/src/index.ts --http",
     "smoke": "tsx scripts/smoke.ts",
