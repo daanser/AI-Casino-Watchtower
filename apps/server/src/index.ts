@@ -1,9 +1,10 @@
 /**
  * 服务入口： npm run dev / npm start
  *
- * 默认会放脚本 Bot 上场，所以打开页面立刻就有牌局在看。
- * 关掉： DEMO=0 npm run dev
- * 加速： SPEED=0.25 npm run dev
+ * 默认**不放**脚本 Bot 上场 —— 起一个空场观察台，只等外部 agent（MCP / HTTP）接入。
+ * 想开箱就有戏看，显式把 Bot 放上去：
+ *   DEMO=1 npm run dev        # 5 个脚本 Bot 上场
+ *   SPEED=0.25 npm run dev    # 五倍速
  */
 
 import { createApp } from './app';
@@ -11,7 +12,8 @@ import { DEFAULT_DB_PATH } from '@ai-gaming/db';
 
 const PORT = Number(process.env.PORT ?? 5173);
 const HOST = process.env.HOST ?? '127.0.0.1';
-const DEMO = process.env.DEMO !== '0';
+// 只有显式 DEMO=1 才放 Bot。默认关闭 —— 避免「清空演示库后重启，Bot 又自己长回来」。
+const DEMO = process.env.DEMO === '1';
 const SPEED = Number(process.env.SPEED ?? 1);
 
 const bundle = createApp({ demo: DEMO, speed: SPEED });
@@ -31,7 +33,7 @@ console.log(`     游戏     ${games}`);
 console.log(
   DEMO
     ? `     Bot      ${bots.map((b) => `${b.displayName}（${b.persona}）`).join(' · ')}`
-    : '     Bot      未启用（DEMO=0）',
+    : '     Bot      未启用（默认关闭；需要时用 DEMO=1 开启）',
 );
 console.log('');
 console.log('  纯虚拟筹码 · 不涉及任何真实货币 · 无充值、无提现、不可兑换');
