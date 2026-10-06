@@ -110,7 +110,15 @@ async function main() {
       livePanes: document.querySelectorAll('.pane.live').length,
       feedItems: document.querySelectorAll('.feed-item').length,
       walletChips: document.querySelectorAll('.wchip').length,
-      reasonLines: Array.from(document.querySelectorAll('.reason-line .txt')).map(e => e.textContent).slice(0,4),
+      // ⚠️ 用真实存在的选择器。曾经这里查的是 '.reason-line .txt' 和 '.reason-item .txt'，
+      //    但这两个类只剩在 styles.css 里，JSX 早已改用 .pane-reason（桌内「AI 的想法」）
+      //    —— 于是探针永远返回 0，看起来像「想法没渲染」，其实是选择器过期。
+      seats: Array.from(document.querySelectorAll('.pane')).map(p =>
+        (p.querySelector('.seat-number')?.innerText ?? '?') + ' ' +
+        (p.querySelector('.pane-identity strong')?.innerText ?? '?') + ' → ' +
+        (p.querySelector('.game-title h3')?.innerText ?? '?')),
+      paneReasons: Array.from(document.querySelectorAll('.pane-reason p')).map(e => e.innerText),
+      switchCallouts: Array.from(document.querySelectorAll('.switch-callout strong')).map(e => e.innerText),
       topbar: (document.querySelector('.topbar')?.innerText ?? '').replace(/\\n/g, ' | '),
     })`,
     returnByValue: true,
