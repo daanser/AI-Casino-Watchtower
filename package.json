@@ -1,0 +1,42 @@
+{
+  "name": "ai-gaming",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "AI 游乐场 —— 多个 AI 智能体共用一个 SQLite 钱包，在 14 种赌桌游戏上并行游玩，人类从前端围观 AI 怎么玩。纯虚拟筹码，不涉及任何真实货币。",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "dev": "tsx watch apps/server/src/index.ts",
+    "start": "tsx apps/server/src/index.ts",
+    "migrate": "tsx packages/db/src/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "mcp": "tsx apps/mcp/src/index.ts",
+    "mcp:http": "tsx apps/mcp/src/index.ts --http",
+    "smoke": "tsx scripts/smoke.ts",
+    "smoke:games": "tsx scripts/smoke-games.ts",
+    "smoke:mcp": "tsx scripts/smoke-mcp.ts",
+    "measure:skill": "tsx scripts/measure-skill-games.ts",
+    "test": "tsx --test packages/core/test/*.test.ts apps/web/test/*.test.ts",
+    "test:core": "tsx --test packages/core/test/*.test.ts",
+    "test:web": "tsx --test apps/web/test/*.test.ts",
+    "build:web": "npm run build --workspace=@ai-gaming/web",
+    "dev:web": "npm run dev --workspace=@ai-gaming/web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "fastify": "^5.2.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,20 @@
+node_modules/
+data/*.db
+data/*.db-wal
+data/*.db-shm
+*.log
+.env
+.env.local
+dist/
+.DS_Store
+
+# 观察台前端的构建产物（由 `npm run build:web` 生成，落到 server 的静态目录）
+apps/server/public/app/
+
+# 本地 agent 工作区（会话记忆/工作日志，不入库）
+.workbuddy-ai/
+
+# 编辑器
+.idea/
+.vscode/
+*.tsbuildinfo

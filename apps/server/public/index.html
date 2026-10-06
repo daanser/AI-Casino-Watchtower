@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI 游乐场 · 实时观察台</title>
+<style>
+  :root {
+    --bg: #0e1015;
+    --panel: #161a23;
+    --panel-2: #1d222d;
+    --line: #262c3a;
+    --text: #e7eaf2;
+    --muted: #8b93a7;
+    --dim: #5c6478;
+    --accent: #7c5cff;
+    --win: #ff5f5f;
+    --lose: #35c46f;
+    --gold: #f0b90b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13px/1.55 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif;
+    display: flex; flex-direction: column; height: 100vh; overflow: hidden;
+  }
+
+  header {
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px 20px; border-bottom: 1px solid var(--line);
+    background: var(--panel); flex-shrink: 0;
+  }
+  .brand { font-size: 15px; font-weight: 600; letter-spacing: .5px; }
+  .brand span { color: var(--accent); }
+  .stat { display: flex; align-items: baseline; gap: 6px; }
+  .stat .k { color: var(--dim); font-size: 12px; }
+  .stat .v { font-variant-numeric: tabular-nums; font-weight: 600; }
+  .spacer { flex: 1; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 10px; border-radius: 999px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    font-size: 12px; color: var(--muted);
+  }
+  .led { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); }
+  .led.on { background: var(--lose); box-shadow: 0 0 6px var(--lose); }
+  .led.bad { background: var(--win); }
+
+  .layout-btn {
+    background: var(--panel-2); color: var(--muted); border: 1px solid var(--line);
+    border-radius: 6px; padding: 3px 9px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: .15s;
+  }
+  .layout-btn:hover { color: var(--text); border-color: var(--dim); }
+  .layout-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+  main {
+    flex: 1; overflow: auto; padding: 16px;
+    display: grid; gap: 14px;
+    grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    align-content: start;
+  }
+
+  .pane {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 12px; padding: 14px; display: flex; flex-direction: column;
+    gap: 10px; min-height: 260px; position: relative; overflow: hidden;
+  }
+  .pane.flash-win { animation: flashWin .7s ease-out; }
+  .pane.flash-lose { animation: flashLose .7s ease-out; }
+  @keyframes flashWin {
+    0% { border-color: var(--win); box-shadow: 0 0 0 1px var(--win) inset; }
+    100% { border-color: var(--line); box-shadow: none; }
+  }
+  @keyframes flashLose {
+    0% { border-color: var(--lose); }
+    100% { border-color: var(--line); }
+  }
+
+  .pane-head { display: flex; align-items: center; gap: 8px; }
+  .table-name { font-weight: 600; font-size: 13px; }
+  .game-tag {
+    font-size: 11px; color: var(--accent); background: rgba(124,92,255,.12);
+    padding: 1px 7px; border-radius: 4px;
+  }
+  .pane-head .spacer { flex: 1; }
+  .pane-head .bal { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; }
+
+  .bot { display: flex; align-items: baseline; gap: 8px; }
+  .bot .name { font-weight: 600; }
+  .bot .persona { color: var(--dim); font-size: 12px; }
+
+  .stage {
+    background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+    min-height: 104px; display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 12px; flex-direction: column;
+  }
+  .stage .idle { color: var(--dim); font-size: 12px; }
+
+  .reel {
+    width: 54px; height: 68px; border-radius: 8px; background: #0b0d12;
+    border: 1px solid var(--line); display: flex; align-items: center;
+    justify-content: center; font-size: 30px; line-height: 1;
+  }
+  .reel.spin { animation: blur .12s linear infinite; }
+  @keyframes blur { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
+
+  .cards { display: flex; gap: 22px; align-items: center; }
+  .side { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .side .lbl { font-size: 11px; color: var(--dim); letter-spacing: 1px; }
+  .card {
+    width: 46px; height: 64px; border-radius: 7px; background: #f5f6f8;
+    color: #14161c; display: flex; flex-direction: column; align-items: center;
+    justify-content: center; font-weight: 700; font-size: 19px; line-height: 1.1;
+  }
+  .card.red { color: #d92d2d; }
+  .card.back { background: linear-gradient(135deg, #2c3346, #1b2030); color: transparent; }
+
+  .ball {
+    width: 74px; height: 74px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 30px; font-weight: 700;
+    color: #fff; border: 2px solid rgba(255,255,255,.15);
+  }
+  .ball.red { background: #c0392b; }
+  .ball.black { background: #1b1f28; }
+  .ball.green { background: #1e8449; }
+  .ball.empty { background: var(--panel); color: var(--dim); font-size: 22px; border-style: dashed; }
+
+  .verdict { font-size: 12px; color: var(--muted); text-align: center; }
+  .verdict b { font-size: 14px; }
+  .verdict .up { color: var(--win); }
+  .verdict .down { color: var(--lose); }
+
+  .reason {
+    border-left: 2px solid var(--accent); padding: 4px 0 4px 10px;
+    color: #b9c0d4; font-size: 12.5px; min-height: 34px;
+  }
+  .reason .who { color: var(--accent); font-weight: 600; }
+  .reason.empty { border-left-color: var(--line); color: var(--dim); }
+
+  footer {
+    flex-shrink: 0; height: 148px; border-top: 1px solid var(--line);
+    background: var(--panel); display: flex; flex-direction: column;
+  }
+  .feed-head {
+    padding: 7px 20px; font-size: 11px; color: var(--dim);
+    letter-spacing: 1px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .feed { flex: 1; overflow-y: auto; padding: 6px 20px 10px; font-size: 12px; }
+  .feed-line { display: flex; gap: 10px; padding: 1.5px 0; font-variant-numeric: tabular-nums; }
+  .feed-line .t { color: var(--dim); width: 58px; flex-shrink: 0; }
+  .feed-line .tbl { color: var(--accent); width: 78px; flex-shrink: 0; }
+  .feed-line .msg { color: var(--muted); }
+  .feed-line .up { color: var(--win); }
+  .feed-line .down { color: var(--lose); }
+
+  .disclaimer { color: var(--dim); font-size: 11px; padding: 0 20px 8px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">🔷 AI <span>游乐场</span></div>
+  <div class="stat"><span class="k">总筹码</span><span class="v" id="totalChips">—</span></div>
+  <div class="stat"><span class="k">已开牌局</span><span class="v" id="totalRounds">0</span></div>
+  <div class="spacer"></div>
+  <button class="layout-btn" data-cols="1">1</button>
+  <button class="layout-btn" data-cols="2">2</button>
+  <button class="layout-btn active" data-cols="3">3</button>
+  <button class="layout-btn" data-cols="4">4</button>
+  <button class="layout-btn" data-cols="6">6</button>
+  <div class="pill"><span class="led" id="wsLed"></span><span id="wsText">连接中</span></div>
+  <div class="pill"><span class="led" id="ledgerLed"></span><span id="ledgerText">对账中</span></div>
+</header>
+
+<main id="grid"></main>
+
+<footer>
+  <div class="feed-head"><span>实时事件流</span><span id="feedCount" style="color:var(--dim)"></span></div>
+  <div class="feed" id="feed"></div>
+  <div class="disclaimer">纯虚拟筹码 · 不涉及任何真实货币 · 无充值、无提现、不可兑换</div>
+</footer>
+
+<script>
+(function () {
+  'use strict';
+
+  var GAME_NAME = { slots: '老虎机', 'dragon-tiger': '龙虎斗', roulette: '轮盘' };
+  var COINS = 100;                       // 1 筹码 = 100 分
+  var fmt = function (cents) {
+    return (cents / COINS).toLocaleString('zh-CN', { maximumFractionDigits: 2 });
+  };
+
+  var grid = document.getElementById('grid');
+  var feed = document.getElementById('feed');
+  var panes = {};          // tableId -> pane 状态
+  var roundToTable = {};   // roundId -> tableId
+  var totalRounds = 0;
+  var balances = {};       // walletId -> cents
+  var feedLines = 0;
+
+  // ── 分屏切换 ─────────────────────────────────────────────
+  document.querySelectorAll('.layout-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('.layout-btn').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      grid.style.setProperty('--cols', btn.dataset.cols);
+    });
+  });
+
+  // ── 建面板 ───────────────────────────────────────────────
+  function buildPanes(bots) {
+    grid.innerHTML = '';
+    panes = {};
+    var seen = {};
+
+    bots.forEach(function (bot) {
+      var tid = bot.tableId;
+      if (seen[tid]) {
+        seen[tid].bots.push(bot);
+        return;
+      }
+      var p = { tableId: tid, gameId: bot.gameId, bots: [bot], roundId: null, stage: null, symbols: [] };
+      seen[tid] = p;
+      panes[tid] = p;
+    });
+
+    var list = Object.keys(panes).map(function (k) { return panes[k]; });
+    if (list.length === 0) {
+      grid.innerHTML = '<div style="color:var(--dim);padding:40px;text-align:center">还没有桌台。启动时带上 DEMO=1 就会自动开局。</div>';
+      return;
+    }
+
+    list.forEach(function (p, i) {
+      var el = document.createElement('div');
+      el.className = 'pane';
+      el.id = 'pane-' + p.tableId;
+      el.innerHTML =
+        '<div class="pane-head">' +
+          '<span class="table-name">桌 ' + (i + 1) + '</span>' +
+          '<span class="game-tag">' + (GAME_NAME[p.gameId] || p.gameId) + '</span>' +
+          '<span class="spacer"></span>' +
+          '<span class="bal" data-bal>—</span>' +
+        '</div>' +
+        '<div class="bot"><span class="name">' + esc(p.bots[0].displayName) + '</span>' +
+          '<span class="persona">' + esc(p.bots[0].persona || '') + '</span></div>' +
+        '<div class="stage" data-stage><span class="idle">等待开局…</span></div>' +
+        '<div class="reason empty" data-reason>尚未发言</div>';
+      grid.appendChild(el);
+      p.el = el;
+      refreshBalance(p);
+    });
+  }
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function refreshBalance(p) {
+    var w = balances[p.bots[0].walletId];
+    var el = p.el && p.el.querySelector('[data-bal]');
+    if (el) el.textContent = w == null ? '—' : fmt(w) + ' 筹码';
+  }
+
+  function refreshTotal() {
+    var sum = 0, n = 0;
+    Object.keys(balances).forEach(function (k) {
+      if (k.indexOf('house') === -1) { sum += balances[k]; n++; }
+    });
+    document.getElementById('totalChips').textContent = n ? fmt(sum) : '—';
+    document.getElementById('totalRounds').textContent = totalRounds;
+  }
+
+  // ── 舞台渲染 ─────────────────────────────────────────────
+  function setStage(p, html) {
+    var el = p.el && p.el.querySelector('[data-stage]');
+    if (el) el.innerHTML = html;
+  }
+
+  function renderIdle(p) {
+    setStage(p, '<span class="idle">下注中…</span>');
+  }
+
+  function renderSymbols(p) {
+    setStage(p, p.symbols.map(function (s, i) {
+      return '<div class="reel" data-reel="' + i + '">' + esc(s || '?') + '</div>';
+    }).join(''));
+  }
+
+  function renderVerdict(p, html) {
+    var el = p.el && p.el.querySelector('[data-stage]');
+    if (el) el.insertAdjacentHTML('beforeend', '<div class="verdict">' + html + '</div>');
+  }
+
+  // ── 事件处理 ─────────────────────────────────────────────
+  function handleRoundStarted(f) {
+    var p = panes[f.tableId];
+    if (!p) return;
+    p.roundId = f.roundId;
+    p.symbols = [];
+    roundToTable[f.roundId] = f.tableId;
+    totalRounds++;
+    refreshTotal();
+
+    if (p.gameId === 'slots') {
+      p.symbols = ['?', '?', '?'];
+      renderSymbols(p);
+    } else if (p.gameId === 'roulette') {
+      setStage(p, '<div class="ball empty">?</div>');
+    } else {
+      setStage(p,
+        '<div class="cards">' +
+          '<div class="side"><div class="lbl">龙</div><div class="card back">?</div></div>' +
+          '<div class="side"><div class="lbl">虎</div><div class="card back">?</div></div>' +
+        '</div>');
+    }
+    addFeed(f.tableId, actorOf(p), '开新局 · 押注 ' + fmt(f.betCents) + ' 筹码', '');
+  }
+
+  function handleRoundEvent(f) {
+    var p = panes[f.tableId];
+    if (!p) return;
+    var pl = f.payload || {};
+
+    if (f.eventType === 'reel_stop') {
+      p.symbols[pl.reel] = pl.label || pl.symbol;
+      renderSymbols(p);
+    } else if (f.eventType === 'card_dealt') {
+      var side = pl.side === 'dragon' ? 0 : 1;
+      var el = p.el && p.el.querySelectorAll('.card')[side];
+      if (el) {
+        var c = pl.card || {};
+        el.className = 'card' + (c.suit === '♥' || c.suit === '♦' ? ' red' : '');
+        el.textContent = (c.label || '?') + (c.suit || '');
+      }
+    } else if (f.eventType === 'showdown') {
+      renderVerdict(p, '赢家：<b>' + (pl.winner === 'dragon' ? '龙' : pl.winner === 'tiger' ? '虎' : '和') + '</b>');
+    } else if (f.eventType === 'ball_drop') {
+      var b = p.el && p.el.querySelector('.ball');
+      if (b) { b.className = 'ball ' + pl.color; b.textContent = pl.winning; }
+    } else if (f.eventType === 'wheel_spin') {
+      setStage(p, '<div class="ball empty spin">●</div>');
+    } else if (f.eventType === 'result' && pl.multiplier != null) {
+      renderVerdict(p, '赔率 <b class="' + (pl.multiplier > 0 ? 'up' : 'down') + '">×' + pl.multiplier + '</b>');
+    }
+  }
+
+  function handleReasoning(f) {
+    var p = panes[f.tableId];
+    if (!p) return;
+    var el = p.el && p.el.querySelector('[data-reason]');
+    if (el) {
+      el.className = 'reason';
+      el.innerHTML = '<span class="who">' + esc(f.actor) + '</span>：' + esc(f.text);
+    }
+    addFeed(f.tableId, f.actor, '「' + f.text + '」', '');
+  }
+
+  function handleSettled(f) {
+    var p = panes[f.tableId];
+    if (!p) return;
+    var net = f.netCents;
+    var cls = net > 0 ? 'up' : net < 0 ? 'down' : '';
+    var txt = (net > 0 ? '+' : '') + fmt(net);
+    addFeed(f.tableId, actorOf(p),
+      '结算 ' + (net > 0 ? '赢' : net < 0 ? '输' : '平') + ' ' + txt + ' 筹码（余额 ' + fmt(f.balanceAfter) + '）',
+      cls);
+    if (p.el) {
+      p.el.classList.remove('flash-win', 'flash-lose');
+      void p.el.offsetWidth;
+      p.el.classList.add(net > 0 ? 'flash-win' : 'flash-lose');
+    }
+  }
+
+  function actorOf(p) { return p && p.bots[0] ? p.bots[0].displayName : '?'; }
+
+  function addFeed(tableId, who, msg, cls) {
+    var p = panes[tableId];
+    var line = document.createElement('div');
+    line.className = 'feed-line';
+    var d = new Date();
+    var t = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') + ':' + String(d.getSeconds()).padStart(2, '0');
+    line.innerHTML =
+      '<span class="t">' + t + '</span>' +
+      '<span class="tbl">' + esc(who) + '</span>' +
+      '<span class="msg ' + cls + '">' + esc(msg) + '</span>';
+    feed.appendChild(line);
+    feedLines++;
+    while (feedLines > 300) { feed.removeChild(feed.firstChild); feedLines--; }
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  // ── 初始数据 ─────────────────────────────────────────────
+  function loadState() {
+    fetch('/api/v1/state').then(function (r) { return r.json(); }).then(function (s) {
+      (s.wallets || []).forEach(function (w) { balances[w.id] = w.balance_cents; });
+      buildPanes(s.bots || []);
+      refreshTotal();
+      var rec = s.reconcile || [];
+      var ok = rec.length > 0 && rec.every(function (r) { return r.ok; });
+      document.getElementById('ledgerLed').className = 'led' + (ok ? ' on' : rec.length ? ' bad' : '');
+      document.getElementById('ledgerText').textContent = rec.length
+        ? (ok ? '账本一致 (' + rec.length + ')' : '账本异常！')
+        : '对账中';
+    }).catch(function (e) { console.error(e); });
+  }
+
+  // ── WebSocket ────────────────────────────────────────────
+  function connect() {
+    var ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+    ws.onopen = function () {
+      document.getElementById('wsLed').className = 'led on';
+      document.getElementById('wsText').textContent = '实时';
+    };
+    ws.onclose = function () {
+      document.getElementById('wsLed').className = 'led bad';
+      document.getElementById('wsText').textContent = '断开，重连中';
+      setTimeout(connect, 1500);
+    };
+    ws.onerror = function () { ws.close(); };
+    ws.onmessage = function (ev) {
+      var f;
+      try { f = JSON.parse(ev.data); } catch (e) { return; }
+      switch (f.type) {
+        case 'hello': break;
+        case 'round_started': handleRoundStarted(f); break;
+        case 'round_event': handleRoundEvent(f); break;
+        case 'reasoning': handleReasoning(f); break;
+        case 'round_settled': handleSettled(f); break;
+        case 'wallet_update':
+          balances[f.walletId] = f.balanceCents;
+          Object.keys(panes).forEach(function (k) {
+            if (panes[k].bots[0].walletId === f.walletId) refreshBalance(panes[k]);
+          });
+          refreshTotal();
+          break;
+      }
+    };
+  }
+
+  loadState();
+  connect();
+  setInterval(loadState, 15000);
+})();
+</script>
+</body>
+</html>
