@@ -456,6 +456,8 @@ export class RoundService {
       payoutCents,
       netCents,
       balanceAfter,
+      // 结算后的权威局面：事件流推不回来的终局（如德州扑克的庄家底牌）只能靠它
+      view: game.publicView(state),
       // 结算后才揭示种子，供任何人验算
       serverSeed: round.server_seed ?? '',
       breakdown,

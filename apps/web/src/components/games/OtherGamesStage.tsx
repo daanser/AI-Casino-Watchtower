@@ -6,11 +6,20 @@ type View = Record<string, unknown>;
 
 const cardArray = (v: unknown): Card[] => (Array.isArray(v) ? (v as Card[]) : []);
 
-function Cards({ cards, hidden = false }: { cards: Card[]; hidden?: boolean }) {
+function Cards({
+  cards,
+  hidden = false,
+  hiddenCount = 0,
+}: {
+  cards: Card[];
+  hidden?: boolean;
+  hiddenCount?: number;
+}) {
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center', minHeight: 50 }}>
       {cards.map((c, i) => <PCard key={i} card={c} size="sm" animate={i > 1} />)}
       {hidden && <PCard card={null} hidden size="sm" />}
+      {Array.from({ length: hiddenCount }, (_, i) => <PCard key={`h${i}`} card={null} hidden size="sm" />)}
     </div>
   );
 }
@@ -96,12 +105,37 @@ function CrapsStage({ view }: { view: View }) {
 }
 
 function HoldemStage({ view }: { view: View }) {
+  const revealed = Boolean(view.revealed);
+  const decision = String(view.decision ?? 'pending');
+  const dealt = revealed && decision === 'call';
+  // 牌型名字有两个来源：事件流里的 showdown（字符串）与结算时的权威局面（对象）。
+  // 两条路都要认，否则断线重连或漏帧时会只剩「你赢了」三个字，看不出赢在哪。
+  const handName = (flat: unknown, nested: unknown) =>
+    String((flat as string | undefined) ?? (nested as { name?: string } | undefined)?.name ?? '');
+  const playerHandName = handName(view.playerHandName, view.playerHand);
+  const dealerHandName = handName(view.dealerHandName, view.dealerHand);
   return (
     <>
-      <div className="other-hand"><b>你的底牌</b><Cards cards={cardArray(view.player)} /></div>
+      {/* 底牌与庄家并排：德州扑克有四行信息，三行叠着放会被 .stage 的 overflow:hidden 切掉结局 */}
+      <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
+        <div className="other-hand"><b>我的底牌</b><Cards cards={cardArray(view.player)} /></div>
+        <div className="other-hand">
+          <b>庄家{dealt && dealerHandName ? ` · ${dealerHandName}` : ''}</b>
+          {/* 翻牌前只给背面 —— 庄家的两张牌在结算前不该出现在画面上 */}
+          {dealt
+            ? <Cards cards={cardArray(view.dealer)} />
+            : <Cards cards={[]} hiddenCount={Number(view.dealerCardCount ?? 2)} />}
+        </div>
+      </div>
       <div className="other-hand"><b>公共牌</b><Cards cards={cardArray(view.board)} /></div>
-      {view.revealed && view.decision === 'call' && <><div className="other-hand"><b>庄家</b><Cards cards={cardArray(view.dealer)} /></div><b className={view.winner === 'player' ? 'win' : 'push'}>{view.winner === 'player' ? '你赢了' : view.winner === 'tie' ? '平局' : '庄家赢'}{view.playerHandName ? ` · ${view.playerHandName} 对 ${view.dealerHandName}` : ''}</b></>}
-      {!view.revealed && <span className="bet-chip">可选：弃牌 / 跟注</span>}
+      {dealt && (
+        <b className={view.winner === 'player' ? 'win' : 'push'}>
+          {view.winner === 'player' ? '你赢了' : view.winner === 'tie' ? '平局' : '庄家赢'}
+          {playerHandName ? ` · ${playerHandName} 对 ${dealerHandName}` : ''}
+        </b>
+      )}
+      {revealed && decision === 'fold' && <b className="push">已弃牌 · 输掉注额</b>}
+      {!revealed && <span className="bet-chip">可选：弃牌 / 跟注</span>}
     </>
   );
 }

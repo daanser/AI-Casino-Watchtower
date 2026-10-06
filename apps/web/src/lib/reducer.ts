@@ -10,6 +10,7 @@ import type {
   FeedItem,
   MetaFrame,
   PlaygroundSnapshot,
+  PublicRound,
   ReasoningItem,
   SettledRecord,
   TableRuntime,
@@ -276,6 +277,9 @@ export function applyEvent(
       if (eventType === 'turn' || eventType === 'river') {
         next.board = [...((next.board as unknown[]) ?? []), payload.card];
       }
+      // 跟注后牌就定了，把 decision 从 pending 推进到 call ——
+      // 否则桌台会一直以为还停在「等你决定」，结算画面永远不显示。
+      if (eventType === 'call') next.decision = 'call';
       if (eventType === 'fold') {
         next.decision = 'fold';
         next.revealed = true;
@@ -468,13 +472,64 @@ export function reducer(state: State, action: Action): State {
 
       const botTableIds = new Set(action.snapshot.bots.map((b) => b.tableId));
 
+      const tables: Record<string, TableRuntime> = {};
+
+      // ── 冷启动补座位 ──
+      //
+      // 刚打开页面时 state.tables 是空的，而桌位只有两个来源：snapshot.bots（脚本 Bot
+      // 的固定槽位）和实时帧。Bot 没上场时这两个来源都是空的，hello 帧又**故意**不带
+      // 桌位清单 —— 于是刷新一下整层就空了，非得等下一局开局才「活」过来。
+      //
+      // 所以冷启动时用「最近还在活动」的桌位补一次座位，画面直接接上它上一次的终局。
+      // 仍然只在 isWarm 的桌位上补，且只认 recentRounds 里真的出现过的桌号 ——
+      // 既不会复活历史桌号，也不会重演「5 个 Bot 排出 12 个格子」那件事。
+      if (Object.keys(state.tables).length === 0) {
+        const latestByTable = new Map<string, PublicRound>();
+        for (const r of action.snapshot.recentRounds) {
+          const prev = latestByTable.get(r.tableId);
+          if (!prev || r.id > prev.id) latestByTable.set(r.tableId, r);
+        }
+        for (const [id, summary] of liveByTable) {
+          const last = latestByTable.get(id);
+          if (!last || !isWarm(summary)) continue;
+          const settled = last.status === 'settled';
+          tables[id] = {
+            ...emptyTable(id, summary.gameId),
+            roundId: last.id,
+            walletId: last.walletId,
+            betCents: last.betCents,
+            status: settled ? 'settled' : 'running',
+            view: last.view,
+            history: (historyByTable.get(id) ?? []).slice(0, MAX_HISTORY_PER_TABLE),
+            // 结算帧的 view 也在，桌台一上来就能显示上次那手牌，而不是一张白纸
+            lastResult: settled
+              ? {
+                  type: 'round_settled',
+                  roundId: last.id,
+                  tableId: id,
+                  gameId: last.gameId,
+                  walletId: last.walletId,
+                  status: last.status,
+                  payoutCents: last.payoutCents,
+                  netCents: last.netCents,
+                  balanceAfter: 0,
+                  view: last.view,
+                  serverSeed: last.serverSeed ?? '',
+                  breakdown: {},
+                  atMs: 0,
+                }
+              : null,
+          };
+        }
+      }
+
       // 只留三类桌位：
       //   1. 脚本 Bot 的固定槽位 —— 永远在；
       //   2. 手上有没打完的局（running）—— 正打着；
       //   3. 后端那边最近还在活动 —— 外部 MCP agent 刚玩过。
       // 非 Bot 的桌位只可能是「本次会话真的收到过它的实时帧」才存在的
-      // （快照不创建它们），所以这里既不会复活历史桌号，也能把凉掉的回收掉。
-      const tables: Record<string, TableRuntime> = {};
+      // （上面那段冷启动补座位是唯一的例外，它只在 state.tables 为空时跑一次），
+      // 所以这里既不会复活历史桌号，也能把凉掉的回收掉。
       for (const [id, prev] of Object.entries(state.tables)) {
         // 前端把服务端的 awaiting_action（等外部 agent 出手）统一渲染成 running，
         // 所以只看 'running' 就等于「手上有没打完的局」。
@@ -706,7 +761,8 @@ export function reducer(state: State, action: Action): State {
               gameId: f.gameId,
               status: 'settled',
               lastResult: f,
-              view: { ...prev.view, revealed: true, settled: true },
+              // 以服务端的权威局面为准：事件流重放不出来的终局（如德州扑克的庄家底牌）靠它补上
+              view: { ...prev.view, ...(f.view ?? {}), revealed: true, settled: true },
               history: [
                 {
                   roundId: f.roundId,

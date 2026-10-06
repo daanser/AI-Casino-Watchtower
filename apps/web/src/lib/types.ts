@@ -122,6 +122,8 @@ export interface RoundSettledFrame {
   payoutCents: Cents;
   netCents: Cents;
   balanceAfter: Cents;
+  /** 结算后的权威局面。事件流推不回来的终局（如德州扑克的庄家底牌）只能靠它。 */
+  view?: Record<string, unknown>;
   serverSeed: string;
   breakdown: Record<string, unknown>;
   atMs: number;

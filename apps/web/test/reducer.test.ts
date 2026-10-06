@@ -322,8 +322,7 @@ test('reducer 是纯函数：同样的输入跑两次结果一致', () => {
 test('快照会用最近对局预填事件流（打开页面不至于空白）', () => {
   const snap: PlaygroundSnapshot = {
     wallets: [],
-    // 快照本身不创建桌位（见 reducer 里的说明），所以这里只提供这张桌的元信息：
-    // lastActivity 得是「刚刚」，否则它会被当成凉掉的桌位回收。
+    // 桌位元信息：lastActivity 得是「刚刚」，否则会被当成凉掉的桌位回收。
     tables: [
       { tableId: 'slots-1', gameId: 'slots', players: 1, lastActivity: utcAgo(30_000), openRounds: 0 },
     ],
@@ -375,7 +374,7 @@ test('快照会用最近对局预填事件流（打开页面不至于空白）',
   assert.equal(seeded.feed.length, 1);
   assert.ok(seeded.feed[0].text.includes('第 9 局'));
 
-  // ② 走势：桌位先由实时帧建立（快照不创建桌位），快照再把历史补进去
+  // ② 走势：桌位先由实时帧建立，快照再把历史补进去
   let s = feed(initialState, started('slots', {}, 9));
   s = reducer(s, { type: 'snapshot', snapshot: snap });
   assert.equal(s.tables['slots-1'].history.length, 1);
@@ -582,12 +581,57 @@ test('快照：同一张桌的多行不会变成多个格子，Bot 的 gameId �
   assert.equal(s.tables['bot-alpha'].gameId, 'keno', 'gameId 必须以 snapshot.bots 为准');
 });
 
-test('快照：不会为历史桌号凭空创建格子', () => {
+test('快照：没有最近对局的历史桌号不会凭空长出格子', () => {
   // 快照里的 tables 是「按桌号 × 游戏分组的历史统计」，不是「现在有这些桌」。
   // 拿它当桌位清单，就会把早期测试留下的桌号全渲染出来。
+  // 冷启动补座位只认 recentRounds 里真的出现过的桌号，所以光有一行统计是不够的。
   const snap = snapWith([tableRow('mcp-agent-1', 'roulette', 0, 20_000)], []);
   const s = reducer(initialState, { type: 'snapshot', snapshot: snap });
   assert.deepEqual(Object.keys(s.tables), []);
+});
+
+test('冷启动：刷新页面时用最近还在活动的桌位补座位，画面接上上一次的终局', () => {
+  // 打开页面时 state.tables 是空的，而桌位只有两个来源：snapshot.bots 与实时帧。
+  // Bot 没上场时两个来源都是空的（hello 帧又故意不带桌位清单），
+  // 于是刷新一下整层空白，非得等下一局开局才「活」过来。
+  const snap: PlaygroundSnapshot = {
+    wallets: [],
+    tables: [
+      { tableId: 'leng-prism', gameId: 'holdem', players: 1, lastActivity: utcAgo(30_000), openRounds: 0 },
+    ],
+    games: [],
+    bots: [],
+    recentRounds: [
+      {
+        id: 20,
+        gameId: 'holdem',
+        tableId: 'leng-prism',
+        walletId: 1,
+        betCents: 25_000,
+        status: 'settled',
+        payoutCents: 50_000,
+        netCents: 25_000,
+        seedCommit: 'c',
+        serverSeed: 's',
+        clientSeed: 'x',
+        nonce: 20,
+        startedAt: '2026-10-06 10:51:00',
+        settledAt: '2026-10-06 10:51:05',
+        view: { revealed: true, decision: 'call', dealer: [{ rank: '10', suit: '♥' }] },
+      },
+    ],
+    reconcile: [],
+  };
+
+  const s = reducer(initialState, { type: 'snapshot', snapshot: snap });
+  const t = s.tables['leng-prism'];
+  assert.ok(t, '冷启动应该为最近还在活动的桌位补一个座位');
+  assert.equal(t.status, 'settled');
+  assert.equal(t.roundId, 20);
+  assert.equal(t.betCents, 25_000);
+  assert.equal(t.lastResult?.netCents, 25_000);
+  // 终局局面必须带进来 —— 否则刷新后桌台上看不见庄家的牌，也看不见输赢
+  assert.deepEqual(t.view.dealer, [{ rank: '10', suit: '♥' }]);
 });
 
 test('握手帧只更新连接状态，不会凭空建桌位', () => {

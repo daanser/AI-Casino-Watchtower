@@ -165,6 +165,14 @@ export interface RoundSettledFrame {
   payoutCents: Cents;
   netCents: Cents;
   balanceAfter: Cents;
+  /**
+   * 结算后的权威局面（同样经过 publicView 过滤）。
+   *
+   * 前端是按事件流重放出画面的，但**不是每个游戏的终局都能从事件里推回来**：
+   * 德州扑克的庄家底牌只存在于这里 —— 事件流里的 showdown 只带牌型名字。
+   * 少了这个字段，前端就只画得出自己那两张牌和公共牌，看不见庄家、也看不见输赢。
+   */
+  view?: Record<string, unknown>;
   /** 结算后才揭示，供前端验证 */
   serverSeed: string;
   breakdown: Record<string, unknown>;
