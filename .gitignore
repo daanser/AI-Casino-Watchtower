@@ -18,3 +18,6 @@ apps/server/public/app/
 .idea/
 .vscode/
 *.tsbuildinfo
+
+# 开发期的实施方案稿（含本机环境说明与未定事项，属于内部工作稿，不随仓库分发）
+PLAN.md

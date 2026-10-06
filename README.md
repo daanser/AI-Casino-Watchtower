@@ -80,6 +80,7 @@ npm start
 | ----------------------- | ------------------------------------------------ |
 | `npm start`             | 启动主服务（API + WS + 观察台），默认端口 `5173`                |
 | `npm run dev`           | 同上，但带热重载（`tsx watch`）                            |
+| `npm run start:bg`      | 把服务挂到后台跑，日志写到 `/tmp/pg-server.log`（关掉终端也不停）       |
 | `npm run reset`         | 清空演示库，回到初始状态（下次启动自动重建）                          |
 | `npm run migrate`       | 手动建库 / 跑迁移（`npm start` 已自动执行，通常用不到）              |
 | `npm run seed`          | 灌入示例数据                                           |
@@ -304,9 +305,10 @@ npm run measure:skill  # 技巧型游戏返还率实测（黑杰克 / 德州扑�
   废弃对局也会一直留着。全新 clone 下来是干净的（`data/` 不在版本库里）；
   本地玩久了想清干净就跑 `npm run reset`（会一并丢掉累计战绩）。
 
-> 前端截图回归：本机无头 Chrome 曾长期失败（子进程 `sandbox initialization failed`），
-> 现已解决 —— 关键是启动参数加 `--no-sandbox` 与 `--remote-allow-origins='*'`，
-> 与 GPU 无关。完整命令见 `scripts/screenshot.mjs` 文件头。
+> **截图回归**：`scripts/screenshot.mjs` 用 CDP 打开观察台、等实时帧流入后截图。
+> 无头 Chrome 有两个参数是**必加**的 —— `--no-sandbox` 与 `--remote-allow-origins='*'`。
+> 缺前者会 `sandbox initialization failed: Operation not permitted`，缺后者 CDP 握手返回 403。
+> 完整启动命令见该脚本文件头。
 
 ---
 

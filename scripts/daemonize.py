@@ -1,18 +1,19 @@
 """
-把一条命令彻底脱离当前会话启动。
+把一条命令彻底脱离当前终端会话启动（`npm run start:bg` 用它把服务挂到后台）。
 
 为什么需要它：
-- 在 Bash 工具里写 `cmd &`，进程会在那次工具调用结束时被回收（下一句就 ECONNREFUSED）。
-- 用 `run_in_background: true` 能活一阵，但会话/回合边界一到还是会被收掉。
-- macOS **没有 `setsid` 命令**，`launchctl submit` 在这台机器上也不生效（不注册、不建日志）。
+- 在终端里写 `cmd &` 起的进程仍留在原进程组，终端一关（或收到进程组信号）就被带走。
+- macOS 没有 `setsid` 命令，`launchctl submit` 也不注册作业、不建日志。
 - `nohup` + `disown` 只改信号处理和 shell 作业表，进程仍在原进程组里。
 
 所以走经典的双 fork：setsid() 开新会话（新进程组，收不到原会话的进程组信号），
 再 fork 一次确保拿不回控制终端，然后立刻退出 —— 目标进程被 launchd(pid 1) 收养，彻底独立。
 
 用法：
-    python3 daemonize.py <日志文件> <命令> [参数...]
-    DAEMON_CWD=<工作目录> python3 daemonize.py /tmp/x.log npm start
+    python3 scripts/daemonize.py <日志文件> <命令> [参数...]
+    DAEMON_CWD=<工作目录> python3 scripts/daemonize.py /tmp/x.log npm start
+
+想确认真的脱离了：比对目标进程的 os.getsid(pid) 与本 shell 的会话 id，不同才算成功。
 """
 
 import os
