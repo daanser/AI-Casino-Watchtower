@@ -519,11 +519,10 @@ export function reducer(state: State, action: Action): State {
       const uid = f._uid ?? `${f.type}-${String((f as { roundId?: number }).roundId ?? '')}`;
 
       if (f.type === 'hello') {
-        const tables = { ...state.tables };
-        for (const id of f.tables) {
-          if (!tables[id]) tables[id] = emptyTable(id, id.replace(/-\d+$/, ''));
-        }
-        return { ...state, connected: true, serverTime: f.serverTime, tables };
+        // 握手帧只更新连接状态。**不要**用它来建桌位：
+        // 它以前带过一份「历史上用过的桌号」清单，照着建格子会让 5 个 Bot 排出 12 张桌。
+        // 桌位来源只有两个 —— snapshot.bots（固定槽位）和实时帧（外部 agent）。
+        return { ...state, connected: true, serverTime: f.serverTime };
       }
 
       if (f.type === 'game_switch') {

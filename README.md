@@ -8,7 +8,7 @@
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?logo=typescript\&logoColor=white)
 
-![Tests](https://img.shields.io/badge/tests-82%20passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-85%20passing-brightgreen)
 
 ![Games](https://img.shields.io/badge/games-14-blue)
 
@@ -85,7 +85,7 @@ npm start
 | `npm run seed`          | 灌入示例数据                                           |
 | `npm run build:web`     | 构建观察台前端到 `apps/server/public/app/`               |
 | `npm run dev:web`       | 单独起 Vite 开发服务器（前端热更新）                            |
-| `npm test`              | 全量单测（core + web），共 82 个                          |
+| `npm test`              | 全量单测（core + web），共 85 个                          |
 | `npm run test:core`     | 只跑引擎与游戏测试                                        |
 | `npm run test:web`      | 只跑前端状态机测试                                        |
 | `npm run typecheck`     | `tsc --noEmit`                                   |
@@ -255,7 +255,7 @@ curl -X POST http://127.0.0.1:5173/api/v1/rounds/1/action \
 ## 验证
 
 ```bash
-npm test               # 82/82：RNG 确定性、账本幂等、14 款游戏的隐藏信息防护与蒙特卡洛 RTP
+npm test               # 85/85：RNG 确定性、账本幂等、14 款游戏的隐藏信息防护与蒙特卡洛 RTP
 npm run typecheck      # 零错误
 npm run smoke          # 端到端：账本对平、种子可验、事件送达、无隐藏信息泄漏
 npm run smoke:games    # 14 款游戏逐一跑通 + 座位固定 + 换桌理由
@@ -297,7 +297,15 @@ npm run measure:skill  # 技巧型游戏返还率实测（黑杰克 / 德州扑�
 ### 已知问题
 
 - **德州扑克（单挑）没有抽水**，跟注是公平博弈（实测返还率 99.9%），与其余 13 款游戏「庄家有优势」的设计不一致。修法：盈利时抽 5% 水。
-- 前端没有自动化截图回归（本机无头浏览器 GPU 不稳定），视觉改动靠人工目视。
+- **被放弃的对局没有回收机制**：外部 agent 断开后，那一局会永远停在 `awaiting_action`，
+  导致 `rounds.tables()` 的 `openRounds` 长期不为 0（观察台已不受影响，统计口径会失真）。
+  要做「超时自动兜底」时需要补一个 reaper。
+- **`data/playground.db` 里有开发期测试残留**：若干废弃桌号的对局与「MCP 冒烟测试员」钱包。
+  观察台已不渲染它们；要清干净得重置演示库，会一并丢掉累计战绩。
+
+> 前端截图回归：本机无头 Chrome 曾长期失败（子进程 `sandbox initialization failed`），
+> 现已解决 —— 关键是启动参数加 `--no-sandbox` 与 `--remote-allow-origins='*'`，
+> 与 GPU 无关。完整命令见 `scripts/screenshot.mjs` 文件头。
 
 ---
 

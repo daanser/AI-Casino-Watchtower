@@ -146,10 +146,10 @@ export interface ReasoningFrame {
   atMs: number;
 }
 
+/** 握手帧。**故意不带桌位清单** —— 桌位只来自 snapshot.bots 与实时帧，详见 shared 里的说明。 */
 export interface HelloFrame {
   type: 'hello';
   serverTime: string;
-  tables: string[];
 }
 
 export interface GameSwitchFrame {

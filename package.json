@@ -21,6 +21,8 @@
     "smoke": "tsx scripts/smoke.ts",
     "smoke:games": "tsx scripts/smoke-games.ts",
     "smoke:mcp": "tsx scripts/smoke-mcp.ts",
+    "probe:tables": "tsx scripts/probe-tables.ts",
+    "ws:dump": "node scripts/ws-dump.mjs",
     "measure:skill": "tsx scripts/measure-skill-games.ts",
     "test": "tsx --test packages/core/test/*.test.ts apps/web/test/*.test.ts",
     "test:core": "tsx --test packages/core/test/*.test.ts",

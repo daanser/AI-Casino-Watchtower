@@ -306,7 +306,6 @@ export function createApp(opts: AppOptions = {}): AppBundle {
       JSON.stringify({
         type: 'hello',
         serverTime: new Date().toISOString(),
-        tables: rounds.tables().map((t) => t.tableId),
       }),
     );
     socket.on('close', () => wsClients.delete(socket));

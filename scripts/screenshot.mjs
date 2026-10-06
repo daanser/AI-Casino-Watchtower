@@ -4,6 +4,27 @@
  * 为什么不用 chrome --screenshot？那个模式下的 --virtual-time-budget
  * 会加速页面时钟，而 WebSocket 消息按真实时间到达 —— 结果是截到一张
  * 「连上了但一条实时数据都还没有」的空页面。
+ *
+ * ── 用法 ────────────────────────────────────────────────────────
+ *   1) 先**以后台任务方式**起 Chrome（不能写成 `chrome ... &`：
+ *      子 shell 里的进程会在那次工具调用结束时被回收，下一句就 ECONNREFUSED）。
+ *
+ *      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+ *        --headless=new --no-sandbox --disable-setuid-sandbox \
+ *        --remote-allow-origins='*' \
+ *        --disable-gpu --use-angle=swiftshader --disable-dev-shm-usage \
+ *        --no-first-run --no-default-browser-check --disable-extensions \
+ *        --hide-scrollbars --remote-debugging-port=9333 \
+ *        --user-data-dir=/tmp/pg-chrome-profile --window-size=1680,1050 about:blank
+ *
+ *      两个参数是**必须**的，缺一个都跑不通：
+ *        --no-sandbox             不加 → 子进程 "sandbox initialization failed:
+ *                                 Operation not permitted"，GPU 进程 exit_code=6，
+ *                                 最后 FATAL: GPU process isn't usable. Goodbye.
+ *                                 （注意这跟 GPU 无关，别去折腾 --in-process-gpu）
+ *        --remote-allow-origins=* 不加 → CDP WebSocket 握手返回 403
+ *
+ *   2) node scripts/screenshot.mjs 9333 http://127.0.0.1:5173/app/ out.png 11000 1680 1050
  */
 
 import WebSocket from 'ws';

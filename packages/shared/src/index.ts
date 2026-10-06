@@ -203,10 +203,17 @@ export interface GameSwitchFrame {
   atMs: number;
 }
 
+/**
+ * 握手帧：连接建立后服务端立刻推的第一帧。
+ *
+ * ⚠️ 这里**故意不带桌位清单**。曾经带过一个 `tables: string[]`，数据源是
+ * `rounds.tables()` —— 那是「按桌号×游戏分组的历史统计」，会把历史上用过的
+ * 所有桌号都发过来，前端照着每个建一个格子，于是 5 个 Bot 排出了 12 个桌位。
+ * 现在桌位来源只有两个：`/api/v1/state` 的 `bots`（固定槽位）+ 实时帧（外部 agent）。
+ */
 export interface HelloFrame {
   type: 'hello';
   serverTime: string;
-  tables: string[];
 }
 
 export type ServerFrame =

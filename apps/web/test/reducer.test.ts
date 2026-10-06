@@ -590,6 +590,18 @@ test('快照：不会为历史桌号凭空创建格子', () => {
   assert.deepEqual(Object.keys(s.tables), []);
 });
 
+test('握手帧只更新连接状态，不会凭空建桌位', () => {
+  // hello 曾经带一份「历史上用过的桌号」清单，前端照着每个都建格子 ——
+  // 那是 5 个 Bot 排出 12 张桌的真正原因。现在它只负责连接状态。
+  const s = reducer(initialState, {
+    type: 'frame',
+    frame: frame({ type: 'hello', serverTime: '2026-10-06T09:00:00.000Z' }),
+  });
+  assert.equal(s.connected, true);
+  assert.equal(s.serverTime, '2026-10-06T09:00:00.000Z');
+  assert.deepEqual(Object.keys(s.tables), []);
+});
+
 test('外部 MCP agent：实时帧让它出现，凉掉之后被回收', () => {
   const agentStarted = (roundId: number) =>
     frame({
