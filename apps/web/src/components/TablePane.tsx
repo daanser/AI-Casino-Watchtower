@@ -86,7 +86,15 @@ export function TablePane({
 
       <div className="pane-reason">
         <div className="reason-label"><span aria-hidden="true">✳</span> AI 的想法</div>
-        <p>{table.reasoning?.text ?? '正在思考下一步…'}</p>
+        <p>
+          {table.reasoning
+            ? // 不是选手自己说的就标出说话人 —— realtime 游戏里「庄家」会替玩家
+              // 走完最后一步（大火箭到点自动炸），那句话不该被当成 AI 的想法
+              table.reasoning.actor && table.reasoning.actor !== displayName
+              ? `${table.reasoning.actor}：${table.reasoning.text}`
+              : table.reasoning.text
+            : '正在思考下一步…'}
+        </p>
       </div>
 
       <div className="pane-foot">

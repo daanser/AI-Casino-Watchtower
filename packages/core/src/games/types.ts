@@ -42,6 +42,27 @@ export interface InitContext {
   params: Record<string, unknown>;
 }
 
+/**
+ * 时间轴上的一步。
+ *
+ * 只有 `pacing: 'realtime'` 的游戏需要它。普通游戏是「玩家动作 → 出结果」，
+ * 但大火箭这类游戏里**时间本身会推进局面**：乘数一直在涨，崩溃点一到就炸，
+ * 跟玩家动没动手无关。
+ *
+ * 游戏在这里声明「时间到了会发生什么」，引擎负责挂定时器按时执行 ——
+ * 到点就当作庄家替玩家走一步 action，走完照常结算。
+ * 如果玩家先收手（那一局已经结算），定时器到点会发现局已结束并跳过。
+ *
+ * `atMs` 是相对开局的毫秒数。
+ */
+export interface TimelineStep {
+  atMs: number;
+  action: GameAction;
+  /** 这一步算谁做的，默认「庄家」 */
+  actor?: string;
+  reasoning?: string;
+}
+
 export interface SettleResult {
   /** 返还给玩家的总额（含本金）。全输就是 0。 */
   payoutCents: number;
@@ -65,6 +86,11 @@ export interface GameModule<S = unknown> {
    * 引擎不知道最终押了多少。
    */
   settle(state: S): SettleResult;
+  /**
+   * 时间轴。**只有 realtime 游戏需要实现**，其余游戏不实现即可。
+   * 引擎在开局后按它挂定时器；返回空数组表示「这局只等玩家动作」。
+   */
+  timeline?(state: S): TimelineStep[];
 }
 
 export class GameRegistry {

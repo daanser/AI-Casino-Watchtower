@@ -20,6 +20,10 @@ const bundle = createApp({ demo: DEMO, speed: SPEED });
 
 await bundle.app.listen({ port: PORT, host: HOST });
 
+// 定时器活不过重启。把还在飞的实时回合（大火箭）按剩余时间重新挂上，
+// 否则那些局会永远卡在 awaiting_action —— 前端一直显示「飞行中」。
+const resumed = bundle.rounds.resumeTimelines();
+
 const games = bundle.rounds.registry.list().map((g) => g.meta.name).join(' · ');
 const bots = bundle.runner.status();
 
@@ -35,6 +39,7 @@ console.log(
     ? `     Bot      ${bots.map((b) => `${b.displayName}（${b.persona}）`).join(' · ')}`
     : '     Bot      未启用（默认关闭；需要时用 DEMO=1 开启）',
 );
+if (resumed > 0) console.log(`     接回     ${resumed} 局飞行中的大火箭`);
 console.log('');
 console.log('  纯虚拟筹码 · 不涉及任何真实货币 · 无充值、无提现、不可兑换');
 console.log('');

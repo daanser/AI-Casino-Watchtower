@@ -25,7 +25,13 @@ import { commitOf, newClientSeed, newServerSeed, verifyCommit } from './fairness
 import { makeRng } from './rng';
 import { WalletService } from './wallet';
 import { createRegistry } from './games';
-import type { GameAction, GameEventDraft, GameModule, SettleResult } from './games/types';
+import type {
+  GameAction,
+  GameEventDraft,
+  GameModule,
+  SettleResult,
+  TimelineStep,
+} from './games/types';
 
 // ─────────────────────────────────────────────────────────────
 // 单写者锁
@@ -316,11 +322,14 @@ export class RoundService {
         atMs: 0,
       });
 
-      return { roundId };
+      return { roundId, state: step.state, settled: settled !== null };
     });
 
     // COMMIT 成功之后才广播
     for (const frame of sink) this.bus.publish(frame);
+    // 实时游戏（大火箭）开局后按时间轴挂定时器：崩溃点一到就炸，不用等玩家动作。
+    // 缺了这一步，前端就只能一路瞎飞，最值钱的那一下（眼睁睁看它炸）永远播不出来。
+    if (!out.settled) this.armTimeline(out.roundId, game, out.state);
     return this.toPublicRound(this.getRoundRow(out.roundId));
   }
 
@@ -394,12 +403,103 @@ export class RoundService {
     });
 
     for (const frame of sink) this.bus.publish(frame);
+    // 玩家先收手、或庄家到点自己动手 —— 这局结束了，把还在等的定时器撤掉
+    if (out.settled) this.clearTimeline(roundId);
 
     return {
       round: this.toPublicRound(this.getRoundRow(roundId)),
       balanceAfter: out.balanceAfter,
       settled: out.settled,
     };
+  }
+
+  // ── 实时游戏的时间轴 ─────────────────────────────────────────
+
+  /** 进行中回合的定时器，结算时清掉 */
+  private readonly timers = new Map<number, ReturnType<typeof setTimeout>[]>();
+
+  /**
+   * 按游戏的时间轴挂定时器。
+   *
+   * `elapsedMs` 用于「重启后接回」：定时器活不过进程重启，所以恢复时要把
+   * 已经飞过的时间扣掉，而不是从头再等一遍。
+   */
+  private armTimeline(
+    roundId: number,
+    game: GameModule<any>,
+    state: unknown,
+    elapsedMs = 0,
+  ): void {
+    const steps = game.timeline?.(state) ?? [];
+    if (steps.length === 0) return;
+
+    const handles = steps.map((step) =>
+      setTimeout(
+        () => {
+          void this.fireTimeline(roundId, step);
+        },
+        Math.max(0, step.atMs - elapsedMs),
+      ),
+    );
+    // 同一局重复挂（理论上不会）时先撤掉旧的，避免两个定时器都开火
+    this.clearTimeline(roundId);
+    this.timers.set(roundId, handles);
+  }
+
+  private async fireTimeline(roundId: number, step: TimelineStep): Promise<void> {
+    try {
+      const round = this.getRoundRow(roundId);
+      // 玩家已经先收手了：这局早就结束，定时器什么也不做
+      if (round.status !== 'awaiting_action') return;
+      await this.act(roundId, step.action, {
+        actor: step.actor ?? '庄家',
+        reasoning: step.reasoning,
+      });
+    } catch (err) {
+      // 定时器里的异常绝不能把进程带崩 —— 它发生在事件循环里，
+      // 没有调用方可以接住。
+      console.error(`[timeline] 第 ${roundId} 局自动推进失败:`, err);
+    } finally {
+      this.clearTimeline(roundId);
+    }
+  }
+
+  private clearTimeline(roundId: number): void {
+    const handles = this.timers.get(roundId);
+    if (!handles) return;
+    for (const h of handles) clearTimeout(h);
+    this.timers.delete(roundId);
+  }
+
+  /**
+   * 进程重启后把还在飞的实时回合接回来。
+   *
+   * 定时器活不过重启，而这类游戏不等玩家动作 —— 不接回来，那些局会永远卡在
+   * awaiting_action（前端显示「飞行中」直到天荒地老）。
+   */
+  resumeTimelines(): number {
+    const rows = all<RoundRow>(
+      this.db,
+      "SELECT * FROM rounds WHERE status = 'awaiting_action'",
+    );
+    let resumed = 0;
+    for (const row of rows) {
+      const game = this.games.get(row.game_id);
+      if (!game?.timeline) continue;
+      const state = JSON.parse(row.state) as unknown;
+      if (game.timeline(state).length === 0) continue;
+      // started_at 是 SQLite 的 UTC 文本（'YYYY-MM-DD HH:MM:SS'）
+      const startedMs = Date.parse(`${row.started_at.replace(' ', 'T')}Z`);
+      const elapsed = Number.isFinite(startedMs) ? Math.max(0, Date.now() - startedMs) : 0;
+      this.armTimeline(row.id, game, state, elapsed);
+      resumed += 1;
+    }
+    return resumed;
+  }
+
+  /** 收摊：撤掉所有还在等的定时器，否则进程退不出去 */
+  disposeTimelines(): void {
+    for (const roundId of [...this.timers.keys()]) this.clearTimeline(roundId);
   }
 
   // ── 结算 ─────────────────────────────────────────────────────

@@ -190,6 +190,36 @@ test('大火箭：涨过崩溃点才收手就全输', () => {
   assert.equal(crash.settle(lose.state).payoutCents, 0);
 });
 
+test('大火箭：时间轴会在崩溃点准时把火箭炸掉', () => {
+  const init = crash.init({ betCents: BET, rng: makeRng('s', 'c', 7, 0), params: {} });
+  const cp = init.state.crashPoint;
+
+  const steps = crash.timeline?.(init.state) ?? [];
+  assert.equal(steps.length, 1, '进行中的局应该恰好有一个时间轴步骤');
+
+  const step = steps[0]!;
+  // 时刻必须对得上崩溃点：早炸会把这局该赢的判输，晚炸等于白送钱
+  const atCrash = msForMultiplier(cp);
+  assert.ok(step.atMs >= atCrash, `定时器早于崩溃点（${step.atMs} < ${atCrash}）`);
+  assert.ok(step.atMs <= atCrash + 2, `定时器明显晚于崩溃点（${step.atMs} > ${atCrash}）`);
+
+  // 到点自动走的那一步，必须真的把这一局判死
+  const auto = crash.act(init.state, step.action, makeRng('s', 'c', 7, 1));
+  assert.equal(auto.state.busted, true, '定时器到点居然没炸');
+  assert.equal(auto.done, true);
+  assert.equal(crash.settle(auto.state).payoutCents, 0);
+});
+
+test('大火箭：已经结束的局不再有时间轴', () => {
+  const init = crash.init({ betCents: BET, rng: makeRng('s', 'c', 9, 0), params: {} });
+  const acted = crash.act(init.state, { type: 'cashout', atMs: 0 }, makeRng('s', 'c', 9, 1));
+  assert.deepEqual(
+    crash.timeline?.(acted.state) ?? [],
+    [],
+    '结算后还留着时间轴，会把已经结完的局再判一次',
+  );
+});
+
 test('大火箭：任意收手点返还率都是 97%', () => {
   const N = 100_000;
   for (const target of [1.2, 1.5, 2.0, 5.0]) {

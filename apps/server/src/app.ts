@@ -382,6 +382,7 @@ export function createApp(opts: AppOptions = {}): AppBundle {
     runner,
     close: async () => {
       runner.stop();
+      rounds.disposeTimelines();
       unsubscribe();
       for (const c of wsClients) c.close();
       wss.close();

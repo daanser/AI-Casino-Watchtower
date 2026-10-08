@@ -172,4 +172,32 @@ export const crash: GameModule<CrashState> = {
       },
     };
   },
+
+  /**
+   * 崩溃点一到就炸 —— 这是大火箭唯一「时间推进局面」的地方。
+   *
+   * 到点由引擎替玩家走一次 cashout：此刻乘数刚好涨到崩溃点，必然 busted，
+   * 于是服务端**自己**把爆炸广播出去。
+   *
+   * 在这之前这个缺口是：服务端只在玩家动作时才推事件，所以前端根本不知道
+   * 什么时候该炸 —— 它只能一路飞下去，直到玩家收手才收到结算帧，
+   * 画面于是从「飞在 3.57×」直接跳到「崩在 1.22×」。大火箭最值钱的那一下
+   * （眼睁睁看着它炸）从来没被播出来过。
+   */
+  timeline(state) {
+    if (state.revealed) return [];
+    // +1ms：让 multiplierAt 稳稳越过崩溃点，不受四舍五入影响
+    const atMs = msForMultiplier(state.crashPoint) + 1;
+    // 崩溃点远到超出可飞行上限（约 2^18 倍）时不挂定时器 —— 概率 3.7e-6，
+    // 真遇上了交给玩家自己收手，也好过挂一个 90 秒后才响的闹钟。
+    if (atMs > MAX_FLIGHT_MS) return [];
+    return [
+      {
+        atMs,
+        action: { type: 'cashout', atMs },
+        actor: '庄家',
+        reasoning: `乘数涨到 ${state.crashPoint.toFixed(2)}×，火箭炸了。`,
+      },
+    ];
+  },
 };
