@@ -321,8 +321,8 @@ export class RoundService {
       return { roundId, state: step.state, settled: settled !== null };
     });
 
-    // COMMIT 成功之后才广播
-    for (const frame of sink) this.bus.publish(frame);
+    // COMMIT 成功之后才广播（按帧上的时刻排程，见 publishTimed）
+    this.publishTimed(sink);
     // 实时游戏（大火箭）开局后按时间轴挂定时器：崩溃点一到就炸，不用等玩家动作。
     // 缺了这一步，前端就只能一路瞎飞，最值钱的那一下（眼睁睁看它炸）永远播不出来。
     if (!out.settled) this.armTimeline(out.roundId, game, out.state);
@@ -398,7 +398,7 @@ export class RoundService {
       return { balanceAfter, settled };
     });
 
-    for (const frame of sink) this.bus.publish(frame);
+    this.publishTimed(sink);
     // 玩家先收手、或庄家到点自己动手 —— 这局结束了，把还在等的定时器撤掉
     if (out.settled) this.clearTimeline(roundId);
 
@@ -407,6 +407,51 @@ export class RoundService {
       balanceAfter: out.balanceAfter,
       settled: out.settled,
     };
+  }
+
+  // ── 广播排程 ─────────────────────────────────────────────────
+
+  /** 排程中的广播定时器，收摊时统一撤掉，否则进程退不出去 */
+  private readonly broadcastTimers = new Set<ReturnType<typeof setTimeout>>();
+
+  /**
+   * 按帧上的时刻排程广播。
+   *
+   * 游戏事件本来就带 delayMs（注释里写着「前端按这个在虚拟时钟上播放动画」），
+   * 但以前是**一次性全推** —— 老虎机三个转轴同时停、黑杰克四张牌一瞬间全亮、
+   * 轮盘的开球瞬间落定。动画根本没有时间可播，delayMs 等于白写。
+   *
+   * 关键是：事件帧的 atMs 是「相对开局」的**累积**时刻，不能直接当延迟用。
+   * 大火箭的爆炸帧 atMs 是 9241，可它本来就是「飞到那一刻才产生」的 ——
+   * 再等 9.2 秒就等于把这一局重放一遍。所以要减掉**本批最早事件**的时刻，
+   * 换算成批内相对位置。
+   *
+   * 结算帧（round_settled + 派彩）永远排在最后，否则前端会先看到结果、再看到过程。
+   */
+  private publishTimed(sink: ServerFrame[]): void {
+    const eventAts = sink.flatMap((f) => (f.type === 'round_event' ? [f.atMs ?? 0] : []));
+    const batchMin = eventAts.length > 0 ? Math.min(...eventAts) : 0;
+    const batchMax = eventAts.length > 0 ? Math.max(...eventAts) : 0;
+    const settleDelay = batchMax - batchMin + 150;
+
+    for (const frame of sink) {
+      const isSettle =
+        frame.type === 'round_settled' ||
+        (frame.type === 'wallet_update' && frame.reason === 'payout');
+      const delay = isSettle
+        ? settleDelay
+        : Math.max(0, ((frame as { atMs?: number }).atMs ?? 0) - batchMin);
+
+      if (delay <= 0) {
+        this.bus.publish(frame);
+        continue;
+      }
+      const handle = setTimeout(() => {
+        this.broadcastTimers.delete(handle);
+        this.bus.publish(frame);
+      }, delay);
+      this.broadcastTimers.add(handle);
+    }
   }
 
   // ── 实时游戏的时间轴 ─────────────────────────────────────────
@@ -496,6 +541,8 @@ export class RoundService {
   /** 收摊：撤掉所有还在等的定时器，否则进程退不出去 */
   disposeTimelines(): void {
     for (const roundId of [...this.timers.keys()]) this.clearTimeline(roundId);
+    for (const h of [...this.broadcastTimers]) clearTimeout(h);
+    this.broadcastTimers.clear();
   }
 
   // ── 结算 ─────────────────────────────────────────────────────

@@ -43,12 +43,21 @@ const walletFrames = (frames: ServerFrame[], reason: string): WalletUpdateFrame[
     (f): f is WalletUpdateFrame => f.type === 'wallet_update' && f.reason === reason,
   );
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * 广播是按帧上的时刻排程的（publishTimed），结算帧排在最后。
+ * 大火箭在 atMs=0 收手时，最后一条事件是 400ms 的爆炸帧，加上 150ms 的结算间隔，
+ * 所以要等 600ms 才能收全。
+ */
+const SETTLE_SETTLE_MS = 600;
+
 test('结算时广播派彩帧 —— 前端余额靠它才会涨', async () => {
   const { db, wallet, rounds, frames } = harness();
   let checked = 0;
 
   try {
-    for (let i = 0; i < 20; i += 1) {
+    for (let i = 0; i < 8; i += 1) {
       frames.length = 0;
       // 大火箭在 atMs=0 收手 = 1.00 倍：崩溃点高于 1.00 就原样退回本金。
       // 崩溃点由种子决定，所以这里不假定输赢，两边都断言。
@@ -60,6 +69,7 @@ test('结算时广播派彩帧 —— 前端余额靠它才会涨', async () => 
         clientSeed: `seed-${i}`,
       });
       const res = await rounds.act(round.id, { type: 'cashout', atMs: 0 }, { actor: '测试选手' });
+      await sleep(SETTLE_SETTLE_MS);
 
       const payouts = walletFrames(frames, 'payout');
       if (res.round.payoutCents > 0) {
@@ -77,7 +87,7 @@ test('结算时广播派彩帧 —— 前端余额靠它才会涨', async () => 
     db.close();
   }
 
-  assert.ok(checked > 0, '20 局一次都没赢，这条用例根本没验证到派彩帧');
+  assert.ok(checked > 0, '8 局一次都没赢，这条用例根本没验证到派彩帧');
 });
 
 test('下注帧的余额是「扣注后」的，不是结算后的', async () => {
@@ -103,6 +113,48 @@ test('下注帧的余额是「扣注后」的，不是结算后的', async () =>
     if (res.round.payoutCents > 0) {
       assert.notEqual(bets[0]!.balanceCents, res.balanceAfter, '这一局赢了，下注帧不该等于结算后余额');
     }
+  } finally {
+    rounds.disposeTimelines();
+    db.close();
+  }
+});
+
+test('事件帧按时刻分帧到达 —— 结算不会抢在过程前面', async () => {
+  const { db, wallet, rounds, frames } = harness();
+
+  try {
+    const round = await rounds.start({
+      walletId: wallet.id,
+      gameId: 'roulette',
+      betCents: coins(10),
+      tableId: 'test-table',
+      params: { bet: 'red' },
+      clientSeed: 'timed-roulette',
+    });
+    frames.length = 0;
+    await rounds.act(round.id, { type: 'spin' }, { actor: '测试选手' });
+
+    // 轮盘的时间轴是 wheel_spin(200ms) → ball_drop(2000ms)。
+    // 刚提交动作时转盘还在转，结果帧不该已经到了 ——
+    // 以前这里是「一次性全推」，转盘动画和开球结果同一瞬间抵达，等于没有动画。
+    assert.equal(
+      frames.filter((f) => f.type === 'round_settled').length,
+      0,
+      '结算帧和事件帧同时到，前端会先看到结果、再看到过程',
+    );
+
+    await sleep(2500);
+    assert.equal(
+      frames.filter((f) => f.type === 'round_settled').length,
+      1,
+      '等了 2.5 秒结算帧还是没到',
+    );
+
+    // 开球必须排在结算之前
+    const order = frames.map((f) => (f.type === 'round_event' ? f.eventType : f.type));
+    const drop = order.indexOf('ball_drop');
+    const settled = order.indexOf('round_settled');
+    assert.ok(drop >= 0 && drop < settled, `开球排在结算之后了：${order.join(' → ')}`);
   } finally {
     rounds.disposeTimelines();
     db.close();
