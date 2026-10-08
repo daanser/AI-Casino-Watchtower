@@ -281,6 +281,12 @@ export interface TableRuntime {
   /** 最后一次推理 */
   reasoning: { actor: string; text: string; at: number } | null;
   gameSwitch?: { fromGameId: string; toGameId: string; reason: string; at: number };
+  /**
+   * 外部 agent 自报的名字。
+   * 固定槽位的 Bot 有 bot.displayName 可用，但外部 agent 既没有 bot 记录、
+   * 也还没开局（没有 walletId），名字只能从 game_switch 帧里带过来。
+   */
+  displayName?: string;
   /** 服务端发来的 startAt（本地时钟） */
   startedAt: number;
 }

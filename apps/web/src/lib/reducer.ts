@@ -596,6 +596,8 @@ export function reducer(state: State, action: Action): State {
               lastResult: null,
               betCents: 0,
               reasoning: { actor: f.displayName, text: f.reason, at: now },
+              // 外部 agent 没有 bot 记录也没有 walletId，名字只能靠这一帧带过来
+              displayName: f.displayName,
               gameSwitch: {
                 fromGameId: f.fromGameId,
                 toGameId: f.toGameId,

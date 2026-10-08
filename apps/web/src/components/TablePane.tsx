@@ -59,7 +59,7 @@ export function TablePane({
 }) {
   const live = table.status === 'running';
   const result = table.lastResult;
-  const displayName = bot?.displayName ?? walletName(table.walletId);
+  const displayName = bot?.displayName ?? table.displayName ?? walletName(table.walletId);
   const recentSwitch = table.gameSwitch?.toGameId === table.gameId ? table.gameSwitch : null;
 
   return (

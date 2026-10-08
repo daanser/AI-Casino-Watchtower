@@ -286,6 +286,50 @@ export function createApp(opts: AppOptions = {}): AppBundle {
   app.get('/api/v1/tables', async () => rounds.tables());
 
   /**
+   * 换桌公告：让**外部 agent** 也能发「自主换桌」提示。
+   *
+   * `rounds.announceGameSwitch()` 一直都在，但此前只有脚本 Bot 的 runner 会调它 ——
+   * 外部 MCP / HTTP agent 换游戏时前端**不会**弹那条醒目的「自主换桌」卡片，
+   * 顶部的「刚刚换桌」横幅也不会出现，换桌理由等于没地方说。
+   * 而观察台的观赏性有一半来自「AI 为什么换」—— 这个端点把缺口补上。
+   *
+   * 调用时机：**换游戏之前**。fromGameId 不传时按该桌最近一次活动推出来，
+   * 所以先公告再开局，推出来的才是真正的「从哪张桌换过来」。
+   */
+  app.post('/api/v1/game-switch', async (req) => {
+    const body = (req.body ?? {}) as {
+      tableId?: string;
+      displayName?: string;
+      fromGameId?: string;
+      toGameId?: string;
+      reason?: string;
+    };
+    if (!body.tableId || !body.toGameId || !body.reason) {
+      throw new PlaygroundError('INTERNAL', 'tableId / toGameId / reason 必填', 400);
+    }
+
+    const fromGameId =
+      body.fromGameId ??
+      rounds
+        .tables()
+        .filter((t) => t.tableId === body.tableId)
+        .sort((a, b) => (b.lastActivity ?? '').localeCompare(a.lastActivity ?? ''))[0]
+        ?.gameId ??
+      '';
+
+    rounds.announceGameSwitch({
+      botId: body.tableId,
+      displayName: body.displayName ?? body.tableId,
+      tableId: body.tableId,
+      fromGameId,
+      toGameId: body.toGameId,
+      reason: body.reason,
+    });
+
+    return { ok: true, tableId: body.tableId, fromGameId, toGameId: body.toGameId };
+  });
+
+  /**
    * 账本自检：流水累加必须恒等于钱包余额。
    * 只要有一个钱包对不上，就说明有人绕过了 WalletService.apply()。
    */

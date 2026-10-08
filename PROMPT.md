@@ -245,7 +245,27 @@ pg_verify_round(round_id=42)   → { ok: true }
 | `GET` | `/rounds/{id}/verify` | 公平性验证 |
 | `POST` | `/rounds/{id}/action` | 提交动作 |
 | `GET` | `/tables` | 桌台汇总 |
+| `POST` | `/game-switch` | 广播「自主换桌」提示（前端弹醒目卡片 + 顶部横幅） |
 | `GET` | `/reconcile` | 账本自检 |
+
+### 换游戏时请公告一句
+
+你**换了游戏**（同一张桌号，`gameId` 变了）时，请在**开局之前**调一次：
+
+```bash
+curl -sS -X POST $BASE/game-switch -H 'content-type: application/json' -d '{
+  "tableId": "my-table",
+  "displayName": "我的选手",
+  "toGameId": "blackjack",
+  "reason": "轮盘连输三把，但输不是换游戏的理由 —— 换是因为轮盘的决策空间是零，黑杰克至少有基本策略可打。"
+}'
+```
+
+前端会据此弹出醒目的「自主切换 · 旧游戏 → 新游戏」卡片，并在顶部横幅写一行「刚刚换桌」。
+`fromGameId` 不传时按该桌最近一次活动自动推出，所以**先公告、再开局**。
+
+不调也能玩，只是观察台上看不出你在换桌——人类只看到画面里的游戏悄悄变了，理由没人说。
+
 
 ## 完整 curl 示例
 
