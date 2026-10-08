@@ -281,20 +281,12 @@ export class RoundService {
         });
       }
 
-      let balanceAfter = this.chargeExtraStake(
-        sink,
-        roundId,
-        input.walletId,
-        step,
-        0,
-        debit.balanceAfter,
-      );
+      this.chargeExtraStake(sink, roundId, input.walletId, step, 0, debit.balanceAfter);
       let settled: SettleResult | null = null;
 
       if (step.done) {
         const round = this.getRoundRow(roundId);
         const info = this.settleInner(sink, round, game, step.state, actor);
-        balanceAfter = info.balanceAfter;
         settled = {
           payoutCents: info.payoutCents,
           stakedCents: info.stakedCents,
@@ -313,12 +305,16 @@ export class RoundService {
         seedCommit,
         atMs: 0,
       });
+      // 下注扣款单独一条，余额用「扣注后」的值。
+      // 以前这里用结算后的余额配净额：开局即结算的局（黑杰克直接 21 点）
+      // 看不到注额被扣走的那一下，而中途结算的局则完全没有派彩帧 ——
+      // 一直开着页面的观众，余额会永远停在下注后的数字上。
       sink.push({
         type: 'wallet_update',
         walletId: input.walletId,
-        balanceCents: balanceAfter,
-        deltaCents: settled ? settled.payoutCents - input.betCents : -input.betCents,
-        reason: settled ? 'bet+payout' : 'bet',
+        balanceCents: debit.balanceAfter,
+        deltaCents: -input.betCents,
+        reason: 'bet',
         atMs: 0,
       });
 
@@ -563,6 +559,20 @@ export class RoundService {
       breakdown,
       atMs: 0,
     });
+
+    // 派彩单独推一条钱包帧。前端靠 wallet_update 更新余额条，
+    // round_settled 里那个 balanceAfter 它不认 —— 少了这一条，
+    // 一直开着页面的观众看到的余额永远是「下注后」的数字（少了派彩）。
+    if (payoutCents > 0) {
+      sink.push({
+        type: 'wallet_update',
+        walletId: round.wallet_id,
+        balanceCents: balanceAfter,
+        deltaCents: payoutCents,
+        reason: 'payout',
+        atMs: 0,
+      });
+    }
 
     return { payoutCents, stakedCents, netCents, balanceAfter, breakdown };
   }
